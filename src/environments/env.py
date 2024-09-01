@@ -13,14 +13,6 @@ RESOURCE_TIME_BUFFER_SIZE = 9
 
 class MachineEnvironment(gym.Env):
     def __init__(self) -> None:
-        # defining the state space,
-        # a machine resource use
-        # matrix
-        self.observation_space = gym.spaces.Dict({
-            "resources": gym.spaces.Box(low=0.0, high=1.0, shape=(NUM_RESOURCES, RESOURCE_TIME_BUFFER_SIZE), dtype=np.float32),
-            "job_queue": gym.spaces.Box(low=0.0, high=1.0, shape=(NUM_RESOURCES + 1, JOB_QUEUE_SIZE), dtype=np.float32)
-        })
-
         # note that jobs also
         # have a timeframe,
         # thus the + 1
@@ -33,7 +25,7 @@ class MachineEnvironment(gym.Env):
 
     def step(self, action):
         # progress the resource matrix one step in time
-        print(self._resources)
+        # print(self._resources)
         resources = self._resources
         resources = np.delete(resources, (0), axis=1)
 
@@ -43,9 +35,12 @@ class MachineEnvironment(gym.Env):
         # process action
         if action == JOB_QUEUE_SIZE:
             # skip
-            pass
+            return self._get_obs(), -0.1, False, False, self._get_info()
         else:
             job = self._job_queue[:, action:action+1]
+            if np.all(job == 0.0):
+                # empty job slot
+                return self._get_obs(), -0.1, False, False, self._get_info()
 
             time_frame = job[NUM_RESOURCES]
             job_resources = job[0:NUM_RESOURCES, 0:1]
@@ -55,13 +50,14 @@ class MachineEnvironment(gym.Env):
             if not is_not_over:
                 # the scheduler allocated too many jobs
                 # and now a resource is overused
-                return self._get_obs(), 0, False, False, self._get_info()
+                return self._get_obs(), -0.2, False, False, self._get_info()
 
             # remove job from queue
             self._job_queue[:, action] = 0
 
             # update machine resources
-            self._resources = res_with_job
+            resources[0:NUM_RESOURCES, 0:1] = res_with_job
+            self._resources = resources
 
         terminated = False
         if np.all(self._job_queue == 0.0):
@@ -72,8 +68,8 @@ class MachineEnvironment(gym.Env):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
-        self._job_queue = np.random.random((NUM_RESOURCES + 1, JOB_QUEUE_SIZE))
         self._resources = np.zeros(shape=(NUM_RESOURCES, RESOURCE_TIME_BUFFER_SIZE), dtype=np.float32)
+        self._job_queue = np.random.random(size=(NUM_RESOURCES + 1, JOB_QUEUE_SIZE))
 
         observation = self._get_obs()
         info = self._get_info()
@@ -90,10 +86,14 @@ class MachineEnvironment(gym.Env):
         pass
 
     def _get_obs(self):
-        return {
-            "resources": self._resources,
-            "job_queue": self._job_queue
-        }
+        resources = self._resources.flatten()
+        job_queue = self._job_queue.flatten()
+
+        # print(f'_get_obs, resources shape: {resources.shape}')
+        # print(f'_get_obs, job_queue shape: {job_queue.shape}')
+
+        state = np.concatenate((resources, job_queue))
+        return state
 
     def _get_info(self):
         return {}
