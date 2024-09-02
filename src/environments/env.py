@@ -7,9 +7,9 @@ from matplotlib.colors import LogNorm
 # https://people.csail.mit.edu/alizadeh/papers/deeprm-hotnets16.pdf
 
 # size of the job buffer
-JOB_QUEUE_SIZE = 9
+JOB_QUEUE_SIZE = 4
 NUM_RESOURCES = 2
-RESOURCE_TIME_BUFFER_SIZE = 9
+RESOURCE_TIME_BUFFER_SIZE = 4
 
 class MachineEnvironment(gym.Env):
     def __init__(self) -> None:
@@ -88,9 +88,6 @@ class MachineEnvironment(gym.Env):
     def _get_obs(self):
         resources = self._resources.flatten()
         job_queue = self._job_queue.flatten()
-
-        # print(f'_get_obs, resources shape: {resources.shape}')
-        # print(f'_get_obs, job_queue shape: {job_queue.shape}')
 
         state = np.concatenate((resources, job_queue))
         return state

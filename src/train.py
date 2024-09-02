@@ -1,3 +1,4 @@
+import os
 import gymnasium as gym
 import math
 import random
@@ -56,6 +57,8 @@ EPS_DECAY = 1000 # controls the rate of exponential decay of epsilon, higher mea
 TAU = 0.005 # update rate of target network
 LR = 1e-4 # learning rate
 
+OUT_DIR = '../out'
+
 n_actions = env.action_space.n
 print(n_actions)
 state, info = env.reset()
@@ -88,8 +91,11 @@ def select_action(state):
 
 episode_rewards = []
 
-def plot_durations(show_result=False):
-    plt.figure(1)
+latest_figure = None
+def plot_rewards(show_result=False):
+    global latest_figure
+
+    latest_figure = plt.figure(1)
     rewards_t = torch.tensor(episode_rewards, dtype=torch.float)
 
     if show_result:
@@ -162,7 +168,7 @@ def optimize_model():
 
 num_episodes = 50
 if torch.cuda.is_available():
-    num_episodes = 650
+    num_episodes = 700
 
 for i_episode in range(num_episodes):
     # environment initialization and get its state
@@ -205,10 +211,21 @@ for i_episode in range(num_episodes):
 
         if done:
             episode_rewards.append(cumulative_reward)
-            plot_durations()
+            plot_rewards()
             break
 
 print('Done!')
-plot_durations(show_result=True)
+plot_rewards(show_result=True)
 plt.ioff()
 plt.show()
+
+num_files = 0
+for file in os.listdir(OUT_DIR):
+    path = os.path.join(OUT_DIR, file)
+    if not os.path.isfile(path):
+        continue
+
+    num_files += 1
+
+plot_path = os.path.join(OUT_DIR, f'{num_files}.png')
+latest_figure.savefig(plot_path)
