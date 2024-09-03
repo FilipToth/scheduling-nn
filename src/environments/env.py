@@ -23,31 +23,42 @@ class Job:
     scheduled: bool = False
     time_scheduled: int | None = None
 
-    def __init__(self, resource_use: dict[ResourceType, float], time_use: int) -> None:
+    def __init__(self, resource_use: dict[ResourceType, float], time_use: int, time_dispatched: int) -> None:
         self.resource_use = resource_use
         self.time_use = time_use
+        self.time_dispatched = time_dispatched
 
     def schedule(self, time: int) -> None:
         self.scheduled = True
         self.time_scheduled = time
 
-    def new_random() -> Job:
+    def expected_job_slowdown(self) -> int:
+        if not self.scheduled:
+            return 0
+
+        waiting_time = self.time_scheduled - self.time_dispatched
+        service_time = self.time_use
+
+        slowdown = (waiting_time + service_time) / service_time
+        return slowdown
+
+    def new_random(curr_time: int) -> Job:
         resources = {}
         for res in ResourceType:
             use = random.uniform(0, 1)
             resources[res] = use
 
-        time = random.randint(1, RESOURCE_TIME_BUFFER_SIZE)
+        time_use = random.randint(1, RESOURCE_TIME_BUFFER_SIZE)
 
-        job = Job(resources, time)
+        job = Job(resources, time_use, curr_time)
         return job
 
-    def new_empty() -> Job:
+    def new_empty(curr_time: int = 0) -> Job:
         resources = {}
         for res in ResourceType:
             resources[res] = 0.0
 
-        job = Job(resources, 0)
+        job = Job(resources, 0, curr_time)
         job.empty = True
 
         return job
@@ -76,12 +87,20 @@ class MachineEnvironment(gym.Env):
             self.time_step()
 
             # TODO: Calculate job slowdown and return reward
-            return self._get_obs(), len(self._running_jobs), False, False, self._get_info()
+
+            reward = 0
+            for job in self._job_queue:
+                if job.time_use == 0:
+                    continue
+
+                reward += -1 / job.time_use
+
+            return self._get_obs(), reward, False, False, self._get_info()
         else:
             job = self._job_queue[action]
             if job.empty:
                 # empty job slot
-                return self._get_obs(), -0.1, False, False, self._get_info()
+                return self._get_obs(), 0, False, False, self._get_info()
 
             job_resources = job.resource_use
             res_with_job = self._resources.copy()
@@ -92,7 +111,7 @@ class MachineEnvironment(gym.Env):
             if not is_not_over:
                 # the scheduler allocated too many jobs
                 # and now a resource is overused
-                return self._get_obs(), -0.2, False, False, self._get_info()
+                return self._get_obs(), 0, False, False, self._get_info()
 
             # remove job from queue
             self._job_queue[action] = Job.new_empty()
@@ -104,15 +123,11 @@ class MachineEnvironment(gym.Env):
             job.schedule(self._time)
             self._running_jobs.append(job)
 
-        terminated = all(j.empty for j in self._job_queue)
-        state = self._get_obs()
-        info = self._get_info()
+            terminated = all(j.empty for j in self._job_queue)
+            state = self._get_obs()
+            info = self._get_info()
 
-        # scheduling new jobs agnostic
-        # should be reward since the
-        # reward is computed at time
-        # step
-        return state, 0, terminated, False, info
+            return state, 0, terminated, False, info
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -126,7 +141,7 @@ class MachineEnvironment(gym.Env):
 
         # generate job queue
         for _ in range(JOB_QUEUE_SIZE):
-            job = Job.new_random()
+            job = Job.new_random(self._time)
             self._job_queue.append(job)
 
         observation = self._get_obs()

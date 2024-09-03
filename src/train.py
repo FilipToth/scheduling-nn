@@ -176,7 +176,8 @@ for i_episode in range(num_episodes):
     state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
 
     cumulative_reward = 0
-    for _ in count():
+
+    for actions_taken in count():
         action = select_action(state)
         observation, reward, terminated, truncated, _ = env.step(action.item())
         cumulative_reward += reward
@@ -210,6 +211,7 @@ for i_episode in range(num_episodes):
         target_net.load_state_dict(target_net_state_dict)
 
         if done:
+            print(f'actions taken: {actions_taken}')
             episode_rewards.append(cumulative_reward)
             plot_rewards()
             break

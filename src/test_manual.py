@@ -9,5 +9,5 @@ while True:
 
     action = int(input())
     observation, reward, terminated, truncated, _ = environment.step(action)
-    print(f'observation shape: {observation.shape}')
-    print(f'reward: {reward}')
+    # print(f'observation shape: {observation.shape}')
+    # print(f'reward: {reward}')
