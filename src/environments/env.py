@@ -20,10 +20,16 @@ class ResourceType(enum.Enum):
 
 class Job:
     empty = False
+    scheduled: bool = False
+    time_scheduled: int | None = None
 
-    def __init__(self, resource_use: dict[ResourceType, float], time: int) -> None:
+    def __init__(self, resource_use: dict[ResourceType, float], time_use: int) -> None:
         self.resource_use = resource_use
-        self.scheduled = False
+        self.time_use = time_use
+
+    def schedule(self, time: int) -> None:
+        self.scheduled = True
+        self.time_scheduled = time
 
     def new_random() -> Job:
         resources = {}
@@ -53,24 +59,24 @@ class MachineEnvironment(gym.Env):
         # have a timeframe,
         # thus the + 1
         self._job_queue: list[Job] = []
-        self._running_jobs = []
+        self._running_jobs: list[Job] = []
         self._resources = {}
+        self._time = 0
 
         # + 1 since the AI can
         # also choose to do nothing
         self.action_space = gym.spaces.Discrete(JOB_QUEUE_SIZE + 1)
 
     def step(self, action: int):
-        # so far we don't have the concept
-        # of time, this will only happen on
-        # each timestep, resource use will
-        # also be a time matrix not a vector
-        self._step_resource_use()
-
         # process action
         if action == JOB_QUEUE_SIZE:
-            # skip
-            return self._get_obs(), -0.1, False, False, self._get_info()
+            # skipping will have no effect
+            # on the resource schedule, thus
+            # we can also skip the timeframe
+            self.time_step()
+
+            # TODO: Calculate job slowdown and return reward
+            return self._get_obs(), len(self._running_jobs), False, False, self._get_info()
         else:
             job = self._job_queue[action]
             if job.empty:
@@ -94,18 +100,29 @@ class MachineEnvironment(gym.Env):
             # update machine resources
             self._resources = res_with_job
 
+            # schedule job
+            job.schedule(self._time)
+            self._running_jobs.append(job)
+
         terminated = all(j.empty for j in self._job_queue)
         state = self._get_obs()
         info = self._get_info()
 
-        return state, 1, terminated, False, info
+        # scheduling new jobs agnostic
+        # should be reward since the
+        # reward is computed at time
+        # step
+        return state, 0, terminated, False, info
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
         self._job_queue = []
+        self._running_jobs = []
         self._resources = {}
-        self._step_resource_use()
+        self._time = 0
+
+        self.time_step(is_init=False)
 
         # generate job queue
         for _ in range(JOB_QUEUE_SIZE):
@@ -126,10 +143,34 @@ class MachineEnvironment(gym.Env):
     def _render_frame(self):
         pass
 
+    def time_step(self, is_init = False):
+        if not is_init:
+            self._time += 1
+
+        self._step_resource_use()
+        self._step_scheduled_jobs()
+
     def _step_resource_use(self):
         self._resources = {}
         for res in ResourceType:
             self._resources[res] = 0.0
+
+    def _step_scheduled_jobs(self):
+        jobs_to_unschedule = []
+        for job in self._running_jobs:
+            time_done = job.time_scheduled + job.time_use
+            if not (time_done == self._time):
+                # add job resources to res use
+                for res, am in job.resource_use.items():
+                    self._resources[res] += am
+
+                continue
+
+            # job is done
+            jobs_to_unschedule.append(job)
+
+        for job in jobs_to_unschedule:
+            self._running_jobs.remove(job)
 
     def _get_obs(self):
         state = []
