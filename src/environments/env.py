@@ -9,9 +9,10 @@ import gymnasium as gym
 # https://people.csail.mit.edu/alizadeh/papers/deeprm-hotnets16.pdf
 
 # size of the job buffer
-JOB_QUEUE_SIZE = 4
+ACTION_SPACE_SIZE = 4
+JOB_QUEUE_SIZE = 30
 NUM_RESOURCES = 2
-RESOURCE_TIME_BUFFER_SIZE = 4
+MAX_JOB_LENGTH = 4
 
 class ResourceType(enum.Enum):
     CPU = 0
@@ -48,7 +49,7 @@ class Job:
             use = random.uniform(0, 1)
             resources[res] = use
 
-        time_use = random.randint(1, RESOURCE_TIME_BUFFER_SIZE)
+        time_use = random.randint(1, MAX_JOB_LENGTH,)
 
         job = Job(resources, time_use, curr_time)
         return job
@@ -70,51 +71,44 @@ class MachineEnvironment(gym.Env):
         # have a timeframe,
         # thus the + 1
         self._job_queue: list[Job] = []
+        self._scheduled_jobs = dict[Job, int] = { }
         self._running_jobs: list[Job] = []
         self._resources = {}
         self._time = 0
 
         # + 1 since the AI can
         # also choose to do nothing
-        self.action_space = gym.spaces.Discrete(JOB_QUEUE_SIZE + 1)
+        self.action_space = gym.spaces.Discrete(ACTION_SPACE_SIZE + 1)
 
     def step(self, action: int):
         # process action
-        if action == JOB_QUEUE_SIZE:
-            # skipping will have no effect
-            # on the resource schedule, thus
-            # we can also skip the timeframe
-            self.time_step()
-
-            # TODO: Calculate job slowdown and return reward
-
-            reward = 0
-            for job in self._job_queue:
-                if job.time_use == 0:
-                    continue
-
-                reward += -1 / job.time_use
-
-            return self._get_obs(), reward, False, False, self._get_info()
+        if action == ACTION_SPACE_SIZE:
+            reward = self.timestep_action()
+            return self._get_obs(), reward, False, False, "TIMESTEP"
         else:
             job = self._job_queue[action]
             if job.empty:
-                # empty job slot
-                return self._get_obs(), 0, False, False, self._get_info()
+                # empty job slot, also time step
+                reward = self.timestep_action()
+                return self._get_obs(), reward, False, False, "EMPTY"
 
             job_resources = job.resource_use
             res_with_job = self._resources.copy()
             for res, am in job_resources.items():
                 res_with_job[res] += am
 
-            is_not_over = all(r <= 1.0 for r in res_with_job.values())
-            if not is_not_over:
+            success_alloc = self._alloc(job)
+            if not success_alloc:
                 # the scheduler allocated too many jobs
-                # and now a resource is overused
-                return self._get_obs(), 0, False, False, self._get_info()
+                # and now a resource is overused, time step
+                reward = self.timestep_action()
+                return self._get_obs(), reward, False, False, "OVERALLOC"
 
             # remove job from queue
-            self._job_queue[action] = Job.new_empty()
+            del self._job_queue[action]
+            if len(self._job_queue) < ACTION_SPACE_SIZE:
+                empty_job = Job.new_empty()
+                self._job_queue.append(empty_job)
 
             # update machine resources
             self._resources = res_with_job
@@ -125,12 +119,26 @@ class MachineEnvironment(gym.Env):
 
             terminated = all(j.empty for j in self._job_queue)
             state = self._get_obs()
-            info = self._get_info()
 
-            return state, 0, terminated, False, info
+            return state, 0, terminated, False, "ALLOC"
+
+    def timestep_action(self):
+        self.time_step()
+
+        # TODO: Calculate job slowdown and return reward
+
+        reward = 0
+        for job in self._job_queue:
+            if job.time_use == 0:
+                continue
+
+            reward += -1 / job.time_use
+
+        return reward
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
+        random.seed(seed)
 
         self._job_queue = []
         self._running_jobs = []
@@ -181,23 +189,33 @@ class MachineEnvironment(gym.Env):
 
                 continue
 
-            # job is done
+            # job is dones
             jobs_to_unschedule.append(job)
 
         for job in jobs_to_unschedule:
             self._running_jobs.remove(job)
+
+    def _alloc(self, job: Job):
+        job_resources = job.resource_use
+        res_with_job = self._resources.copy()
+        for res, am in job_resources.items():
+            res_with_job[res] += am
+
+        is_not_over = all(r <= 1.0 for r in res_with_job.values())
+        return is_not_over
 
     def _get_obs(self):
         state = []
         for res_used in self._resources.values():
             state.append(res_used)
 
-        for job in self._job_queue:
+        for job in self._job_queue[0:ACTION_SPACE_SIZE]:
             assert not job.scheduled
+
             state.extend(job.resource_use.values())
+            state.append(job.time_use)
 
         state = np.array(state, dtype=np.float32)
-
         return state
 
     def _get_info(self):

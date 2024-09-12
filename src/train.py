@@ -172,15 +172,29 @@ if torch.cuda.is_available():
 
 for i_episode in range(num_episodes):
     # environment initialization and get its state
-    state, info = env.reset()
+    state, info = env.reset(seed=93021)
     state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
 
     cumulative_reward = 0
+    num_alloc = 0
+    num_overalloc = 0
+    num_empty = 0
+    num_timestep = 0
 
     for actions_taken in count():
         action = select_action(state)
-        observation, reward, terminated, truncated, _ = env.step(action.item())
+        observation, reward, terminated, truncated, info = env.step(action.item())
         cumulative_reward += reward
+
+        match info:
+            case "ALLOC":
+                num_alloc += 1
+            case "EMPTY":
+                num_empty += 1
+            case "OVERALLOC":
+                num_overalloc += 1
+            case "TIMESTEP":
+                num_timestep += 1
 
         reward = torch.tensor([reward], device=device)
         done = terminated or truncated
@@ -211,7 +225,7 @@ for i_episode in range(num_episodes):
         target_net.load_state_dict(target_net_state_dict)
 
         if done:
-            print(f'actions taken: {actions_taken}')
+            print(f'actions taken: {actions_taken}, alloc: {num_alloc}, overalloc: {num_overalloc}, empty: {num_empty}, timestep: {num_timestep}')
             episode_rewards.append(cumulative_reward)
             plot_rewards()
             break
