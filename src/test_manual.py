@@ -7,7 +7,6 @@ print(f'initial state shape: {initial_state.shape}')
 while True:
     environment.render()
 
-    action = int(input())
+    print(environment._resources)
+    action = int(input("action -> "))
     observation, reward, terminated, truncated, _ = environment.step(action)
-    # print(f'observation shape: {observation.shape}')
-    # print(f'reward: {reward}')
