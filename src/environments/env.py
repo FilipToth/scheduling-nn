@@ -92,7 +92,7 @@ class MachineEnvironment(gym.Env):
                 reward = self.timestep_action()
                 return self._get_obs(), reward, False, False, "EMPTY"
 
-            success_alloc = self._alloc(job)
+            (success_alloc, _time_frame) = self._alloc(job)
             if not success_alloc:
                 # the scheduler allocated too many jobs
                 # and now a resource is overused, time step
@@ -137,7 +137,8 @@ class MachineEnvironment(gym.Env):
         self._resources = np.zeros((NUM_RESOURCES, RESOURCE_TIME_SIZE))
         self._time = 0
 
-        self.time_step(is_init=False)
+        # TODO: is this really necessary?
+        self.time_step(is_init=True)
 
         # generate job queue
         for _ in range(JOB_QUEUE_SIZE):
@@ -158,7 +159,7 @@ class MachineEnvironment(gym.Env):
     def _render_frame(self):
         pass
 
-    def time_step(self, is_init = False):
+    def time_step(self, is_init=False):
         if not is_init:
             self._time += 1
 
@@ -185,7 +186,7 @@ class MachineEnvironment(gym.Env):
         for job in jobs_to_unschedule:
             self._running_jobs.remove(job)
 
-    def _alloc(self, job: Job):
+    def _alloc(self, job: Job) -> tuple[bool, int]:
         job_resources = list(job.resource_use.values())
 
         for time_start in range(RESOURCE_TIME_SIZE - job.time_use):
@@ -193,7 +194,7 @@ class MachineEnvironment(gym.Env):
             timeframe_end = time_start + job.time_use
 
             job_resource_matrix = np.zeros(shape=(NUM_RESOURCES, job.time_use))
-            for i in range(timeframe_start, timeframe_end):
+            for i in range(job.time_use):
                 for j in range(len(job_resources)):
                     res = job_resources[j]
                     job_resource_matrix[j:j + 1, i:i + 1] = res
@@ -207,9 +208,9 @@ class MachineEnvironment(gym.Env):
 
             # update machine resources
             self._resources[:, timeframe_start:timeframe_end] = local_resources_with_job
-            return True
+            return (True, time_start)
 
-        return False
+        return (False, 0)
 
     def _get_obs(self):
         state = self._resources.flatten()

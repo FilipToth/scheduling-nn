@@ -1,6 +1,6 @@
-import environments.env as env
+import environments.env as environment
 
-environment = env.MachineEnvironment()
+environment = environment.MachineEnvironment()
 initial_state, _ = environment.reset()
 print(f'initial state shape: {initial_state.shape}')
 
