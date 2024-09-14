@@ -55,7 +55,13 @@ EPS_START = 0.9 # epsilon start value
 EPS_END = 0.05 # final epsilon value
 EPS_DECAY = 1000 # controls the rate of exponential decay of epsilon, higher means a slower decay
 TAU = 0.005 # update rate of target network
-LR = 1e-4 # learning rate
+
+# previous: 1e-4, the new one
+# converges slower, but is more
+# stable,
+# max cumulative reward: -8.0
+# sjf: -11.48
+LR = 1e-3 # learning rate
 
 OUT_DIR = '../out'
 
@@ -225,8 +231,11 @@ for i_episode in range(num_episodes):
         target_net.load_state_dict(target_net_state_dict)
 
         if done:
-            print(f'actions taken: {actions_taken}, alloc: {num_alloc}, overalloc: {num_overalloc}, empty: {num_empty}, timestep: {num_timestep}')
             episode_rewards.append(cumulative_reward)
+
+            max_reward = max(episode_rewards)
+            print(f'actions taken: {actions_taken}, alloc: {num_alloc}, overalloc: {num_overalloc}, empty: {num_empty}, timestep: {num_timestep}, max_reward: {max_reward}')
+
             plot_rewards()
             break
 

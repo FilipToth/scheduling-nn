@@ -1,17 +1,17 @@
 import unittest
 import numpy as np
-import src.environments.env as environment
+import src.environments.env as env
 
 class TestEnvironment(unittest.TestCase):
     def setUp(self) -> None:
-        self.env = environment.MachineEnvironment()
+        self.env = env.MachineEnvironment()
 
         # don't use the reset function,
         # as we want to use custom overrides
 
         self.env._job_queue = []
-        self.env._running_jobs = []
-        self.env._resources = np.zeros((environment.NUM_RESOURCES, environment.RESOURCE_TIME_SIZE))
+        self.env._scheduled_jobs = []
+        self.env._resources = np.zeros((env.NUM_RESOURCES, env.RESOURCE_TIME_SIZE))
         self.env._time = 0
 
         self.env.time_step(is_init=True)
@@ -93,11 +93,11 @@ class TestEnvironment(unittest.TestCase):
         assert not second_success
         assert second_alloc_time == 0
 
-    def _create_job(self, time: int, res: float) -> environment.Job:
+    def _create_job(self, time: int, res: float) -> env.Job:
         job_res = {
-            environment.ResourceType.CPU: res,
-            environment.ResourceType.MEMORY: res
+            env.ResourceType.CPU: res,
+            env.ResourceType.MEMORY: res
         }
 
-        job = environment.Job(job_res, time, self.env._time)
+        job = env.Job(job_res, time, self.env._time)
         return job

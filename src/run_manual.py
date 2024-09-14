@@ -1,12 +1,12 @@
-import environments.env as environment
+import environments.env as environments
 
-environment = environment.MachineEnvironment()
-initial_state, _ = environment.reset()
+env = environments.MachineEnvironment()
+initial_state, _ = env.reset()
 print(f'initial state shape: {initial_state.shape}')
 
 while True:
-    environment.render()
+    env.render()
 
-    print(environment._resources)
+    print(env._resources)
     action = int(input("action -> "))
-    observation, reward, terminated, truncated, _ = environment.step(action)
+    observation, reward, terminated, truncated, _ = env.step(action)

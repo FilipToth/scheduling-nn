@@ -10,10 +10,12 @@ import gymnasium as gym
 
 # size of the job buffer
 ACTION_SPACE_SIZE = 4
-JOB_QUEUE_SIZE = 30
 NUM_RESOURCES = 2
 RESOURCE_TIME_SIZE = 10
-MAX_JOB_LENGTH = 4
+
+NUM_JOBS_TO_SEND = 30
+JOB_DISPATCH_AFFINITY = 0.4
+MAX_JOB_LENGTH = 6
 
 class ResourceType(enum.Enum):
     CPU = 0
@@ -64,6 +66,7 @@ class MachineEnvironment(gym.Env):
         self._scheduled_jobs: list[Job] = []
         self._resources: np.ndarray = None
         self._time = 0
+        self._jobs_dispatched = 0
 
         # + 1 since the AI can
         # also choose to do nothing
@@ -71,34 +74,39 @@ class MachineEnvironment(gym.Env):
 
     def step(self, action: int):
         # process action
+        reward = 0
+        info = ""
+
         if action == ACTION_SPACE_SIZE:
             reward = self.timestep_action()
-            return self._get_obs(), reward, False, False, "TIMESTEP"
+            info = "TIMESTEP"
         else:
             if action >= len(self._job_queue):
                 # empty job slot, also time step
                 reward = self.timestep_action()
-                return self._get_obs(), reward, False, False, "EMPTY"
+                info = "EMPTY"
+            else:
+                job = self._job_queue[action]
+                (success_alloc, time_frame) = self._alloc(job)
+                if not success_alloc:
+                    # the scheduler allocated too many jobs
+                    # and now a resource is overused, time step
+                    reward = self.timestep_action()
+                    info = "OVERALLOC"
+                else:
+                    # remove job from queue
+                    del self._job_queue[action]
 
-            job = self._job_queue[action]
-            (success_alloc, _time_frame) = self._alloc(job)
-            if not success_alloc:
-                # the scheduler allocated too many jobs
-                # and now a resource is overused, time step
-                reward = self.timestep_action()
-                return self._get_obs(), reward, False, False, "OVERALLOC"
+                    # schedule job
+                    job.schedule(self._time + time_frame)
+                    self._scheduled_jobs.append(job)
 
-            # remove job from queue
-            del self._job_queue[action]
+                    info = "ALLOC"
 
-            # schedule job
-            job.schedule(self._time)
-            self._scheduled_jobs.append(job)
+        state = self._get_obs()
+        terminated = self._jobs_dispatched >= NUM_JOBS_TO_SEND
 
-            terminated = len(self._job_queue) == 0
-            state = self._get_obs()
-
-            return state, 0, terminated, False, "ALLOC"
+        return state, reward, terminated, False, info
 
     def timestep_action(self):
         self.time_step()
@@ -122,14 +130,10 @@ class MachineEnvironment(gym.Env):
         self._scheduled_jobs = []
         self._resources = np.zeros((NUM_RESOURCES, RESOURCE_TIME_SIZE))
         self._time = 0
+        self._jobs_dispatched = 0
 
         # TODO: is this really necessary?
         self.time_step(is_init=True)
-
-        # generate job queue
-        for _ in range(JOB_QUEUE_SIZE):
-            job = Job.new_random(self._time)
-            self._job_queue.append(job)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -149,6 +153,7 @@ class MachineEnvironment(gym.Env):
         if not is_init:
             self._time += 1
 
+        self._job_dispatch()
         self._step_resource_use()
         self._step_scheduled_jobs()
 
@@ -171,6 +176,22 @@ class MachineEnvironment(gym.Env):
 
         for job in jobs_to_unschedule:
             self._scheduled_jobs.remove(job)
+
+    def _job_dispatch(self):
+        p_value = random.uniform(0, 1)
+        if p_value < (1 - JOB_DISPATCH_AFFINITY):
+            return
+
+        resources = {}
+        for res in ResourceType:
+            res_use = random.uniform(0, 1)
+            resources[res] = res_use
+
+        time_use = random.randrange(0, MAX_JOB_LENGTH + 1)
+        job = Job(resources, time_use, self._time)
+
+        self._job_queue.append(job)
+        self._jobs_dispatched += 1
 
     def _alloc(self, job: Job) -> tuple[bool, int]:
         job_resources = list(job.resource_use.values())
