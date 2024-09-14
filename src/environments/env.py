@@ -77,6 +77,7 @@ class MachineEnvironment(gym.Env):
         reward = 0
         info = ""
 
+
         if action == ACTION_SPACE_SIZE:
             reward = self.timestep_action()
             info = "TIMESTEP"
@@ -104,7 +105,9 @@ class MachineEnvironment(gym.Env):
                     info = "ALLOC"
 
         state = self._get_obs()
-        terminated = self._jobs_dispatched >= NUM_JOBS_TO_SEND
+        terminated = self._jobs_dispatched >= NUM_JOBS_TO_SEND \
+            and len(self._job_queue) == 0 \
+            and len(self._scheduled_jobs) == 0
 
         return state, reward, terminated, False, info
 
@@ -168,16 +171,19 @@ class MachineEnvironment(gym.Env):
         jobs_to_unschedule = []
         for job in self._scheduled_jobs:
             time_done = job.time_scheduled + job.time_use
-            if not (time_done == self._time):
+            if time_done > self._time:
                 continue
 
-            # job is dones
+            # job is done
             jobs_to_unschedule.append(job)
 
         for job in jobs_to_unschedule:
             self._scheduled_jobs.remove(job)
 
     def _job_dispatch(self):
+        if self._jobs_dispatched >= NUM_JOBS_TO_SEND:
+            return
+
         p_value = random.uniform(0, 1)
         if p_value < (1 - JOB_DISPATCH_AFFINITY):
             return
