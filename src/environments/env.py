@@ -21,7 +21,6 @@ class ResourceType(enum.Enum):
 
 
 class Job:
-    empty = False
     scheduled: bool = False
     time_scheduled: int | None = None
 
@@ -55,16 +54,6 @@ class Job:
         job = Job(resources, time_use, curr_time)
         return job
 
-    def new_empty(curr_time: int = 0) -> Job:
-        resources = {}
-        for res in ResourceType:
-            resources[res] = 0.0
-
-        job = Job(resources, 0, curr_time)
-        job.empty = True
-
-        return job
-
 
 class MachineEnvironment(gym.Env):
     def __init__(self) -> None:
@@ -72,7 +61,7 @@ class MachineEnvironment(gym.Env):
         # have a timeframe,
         # thus the + 1
         self._job_queue: list[Job] = []
-        self._running_jobs: list[Job] = []
+        self._scheduled_jobs: list[Job] = []
         self._resources: np.ndarray = None
         self._time = 0
 
@@ -86,12 +75,12 @@ class MachineEnvironment(gym.Env):
             reward = self.timestep_action()
             return self._get_obs(), reward, False, False, "TIMESTEP"
         else:
-            job = self._job_queue[action]
-            if job.empty:
+            if action >= len(self._job_queue):
                 # empty job slot, also time step
                 reward = self.timestep_action()
                 return self._get_obs(), reward, False, False, "EMPTY"
 
+            job = self._job_queue[action]
             (success_alloc, _time_frame) = self._alloc(job)
             if not success_alloc:
                 # the scheduler allocated too many jobs
@@ -101,15 +90,12 @@ class MachineEnvironment(gym.Env):
 
             # remove job from queue
             del self._job_queue[action]
-            if len(self._job_queue) < ACTION_SPACE_SIZE:
-                empty_job = Job.new_empty()
-                self._job_queue.append(empty_job)
 
             # schedule job
             job.schedule(self._time)
-            self._running_jobs.append(job)
+            self._scheduled_jobs.append(job)
 
-            terminated = all(j.empty for j in self._job_queue)
+            terminated = len(self._job_queue) == 0
             state = self._get_obs()
 
             return state, 0, terminated, False, "ALLOC"
@@ -133,7 +119,7 @@ class MachineEnvironment(gym.Env):
         random.seed(seed)
 
         self._job_queue = []
-        self._running_jobs = []
+        self._scheduled_jobs = []
         self._resources = np.zeros((NUM_RESOURCES, RESOURCE_TIME_SIZE))
         self._time = 0
 
@@ -175,7 +161,7 @@ class MachineEnvironment(gym.Env):
 
     def _step_scheduled_jobs(self):
         jobs_to_unschedule = []
-        for job in self._running_jobs:
+        for job in self._scheduled_jobs:
             time_done = job.time_scheduled + job.time_use
             if not (time_done == self._time):
                 continue
@@ -184,7 +170,7 @@ class MachineEnvironment(gym.Env):
             jobs_to_unschedule.append(job)
 
         for job in jobs_to_unschedule:
-            self._running_jobs.remove(job)
+            self._scheduled_jobs.remove(job)
 
     def _alloc(self, job: Job) -> tuple[bool, int]:
         job_resources = list(job.resource_use.values())
@@ -217,11 +203,20 @@ class MachineEnvironment(gym.Env):
 
         # append job queue info
         job_state = []
-        for job in self._job_queue[0:ACTION_SPACE_SIZE]:
+
+        queue_len = min(ACTION_SPACE_SIZE, len(self._job_queue))
+        for job in self._job_queue[0:queue_len]:
             assert not job.scheduled
 
             job_state.extend(job.resource_use.values())
             job_state.append(job.time_use)
+
+        # pad to action space size
+        if queue_len < ACTION_SPACE_SIZE:
+            to_add = ACTION_SPACE_SIZE - queue_len
+            for _ in range(to_add):
+                job_state.extend([0 for _ in range(NUM_RESOURCES)])
+                job_state.append(0)
 
         job_state = np.array(job_state)
         state = np.concatenate((state, job_state))
