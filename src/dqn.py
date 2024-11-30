@@ -51,9 +51,9 @@ class DQN(nn.Module):
 
 BATCH_SIZE = 128
 GAMMA = 0.99 # discount factor
-EPS_START = 0.9 # epsilon start value
-EPS_END = 0.05 # final epsilon value
-EPS_DECAY = 1000 # controls the rate of exponential decay of epsilon, higher means a slower decay
+EPS_START = 0.95 # epsilon start value
+EPS_END = 0.005 # final epsilon value
+EPS_DECAY = 500 # controls the rate of exponential decay of epsilon, higher means a slower decay
 TAU = 0.005 # update rate of target network
 
 # previous: 1e-4, the new one
@@ -61,7 +61,7 @@ TAU = 0.005 # update rate of target network
 # stable,
 # max cumulative reward: -8.0
 # sjf: -11.48
-LR = 1e-3 # learning rate
+LR = 1e-4 # learning rate
 
 OUT_DIR = '../out'
 
@@ -76,7 +76,7 @@ target_net = DQN(n_observations, n_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
-memory = ReplayMemory(10000)
+memory = ReplayMemory(100000)
 
 steps_done = 0
 
@@ -233,8 +233,11 @@ for i_episode in range(num_episodes):
         if done:
             episode_rewards.append(cumulative_reward)
 
+            sma_episode_rewards_list = episode_rewards[-15:]
+            rewards_sma = sum(sma_episode_rewards_list) / len(sma_episode_rewards_list)
+
             max_reward = max(episode_rewards)
-            print(f'actions taken: {actions_taken}, alloc: {num_alloc}, overalloc: {num_overalloc}, empty: {num_empty}, timestep: {num_timestep}, max_reward: {max_reward}')
+            print(f'actions taken: {actions_taken}, alloc: {num_alloc}, overalloc: {num_overalloc}, empty: {num_empty}, timestep: {num_timestep}, max_reward: {max_reward}, 15-item SMA: {rewards_sma}')
 
             plot_rewards()
             break
@@ -252,5 +255,5 @@ for file in os.listdir(OUT_DIR):
 
     num_files += 1
 
-plot_path = os.path.join(OUT_DIR, f'{num_files}.png')
+plot_path = os.path.join(OUT_DIR, 'dqn', f'{num_files}.png')
 latest_figure.savefig(plot_path)

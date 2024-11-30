@@ -72,11 +72,22 @@ class MachineEnvironment(gym.Env):
         # also choose to do nothing
         self.action_space = gym.spaces.Discrete(ACTION_SPACE_SIZE + 1)
 
+        # + 1 because it jobs also have a time parameter
+        job_queue_state_size = ACTION_SPACE_SIZE * (NUM_RESOURCES + 1)
+        resource_state_size = NUM_RESOURCES * RESOURCE_TIME_SIZE
+
+        obs_space_size = job_queue_state_size + resource_state_size
+        self.observation_space = gym.spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(obs_space_size,),
+            dtype=np.float32
+        )
+
     def step(self, action: int):
         # process action
         reward = 0
         info = ""
-
 
         if action == ACTION_SPACE_SIZE:
             reward = self.timestep_action()
