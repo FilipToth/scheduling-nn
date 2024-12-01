@@ -90,12 +90,15 @@ class MachineEnvironment(gym.Env):
         info = ""
 
         if action == ACTION_SPACE_SIZE:
-            reward = self.timestep_action()
+            # reward = self.timestep_action()
+            self.timestep_action()
+            reward = -0.05
             info = "TIMESTEP"
         else:
             if action >= len(self._job_queue):
                 # empty job slot, also time step
-                reward = self.timestep_action()
+                # reward = self.timestep_action()
+                reward = -0.25
                 info = "EMPTY"
             else:
                 job = self._job_queue[action]
@@ -103,7 +106,8 @@ class MachineEnvironment(gym.Env):
                 if not success_alloc:
                     # the scheduler allocated too many jobs
                     # and now a resource is overused, time step
-                    reward = self.timestep_action()
+                    # reward = self.timestep_action()
+                    reward = -0.25
                     info = "OVERALLOC"
                 else:
                     # remove job from queue
@@ -114,6 +118,7 @@ class MachineEnvironment(gym.Env):
                     self._scheduled_jobs.append(job)
 
                     info = "ALLOC"
+                    reward = 0.25
 
         state = self._get_obs()
         terminated = self._jobs_dispatched >= NUM_JOBS_TO_SEND \

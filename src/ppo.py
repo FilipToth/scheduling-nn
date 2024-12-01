@@ -34,21 +34,21 @@ device = (
 )
 
 num_cells = 256  # number of cells in each layer i.e. output dim.
-lr = 3e-4
+lr = 1e-4
 max_grad_norm = 1.0
 
 frames_per_batch = 1000
 # For a complete training, bring the number of frames up to 1M
-total_frames = 50_000
+total_frames = 500_000
 
 sub_batch_size = 64  # cardinality of the sub-samples gathered from the current data in the inner loop
 num_epochs = 10  # optimization steps per batch of data collected
 clip_epsilon = (
-    0.2  # clip value for PPO loss: see the equation in the intro for more context.
+    0.1  # clip value for PPO loss: see the equation in the intro for more context.
 )
 gamma = 0.99
 lmbda = 0.95
-entropy_eps = 1e-4
+entropy_eps = 4e-4
 
 # register env
 register(
@@ -70,18 +70,18 @@ env = TransformedEnv(
 )
 
 env.transform[0].init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
-print("normalization constant shape:", env.transform[0].loc.shape)
+# print("normalization constant shape:", env.transform[0].loc.shape)
 
-print("observation_spec:", env.observation_spec)
-print("reward_spec:", env.reward_spec)
-print("input_spec:", env.input_spec)
-print("action_spec (as defined by input_spec):", env.action_spec)
+# print("observation_spec:", env.observation_spec)
+# print("reward_spec:", env.reward_spec)
+# print("input_spec:", env.input_spec)
+# print("action_spec (as defined by input_spec):", env.action_spec)
 
 check_env_specs(env)
 
 rollout = env.rollout(3)
-print("rollout of three steps:", rollout)
-print("Shape of the rollout TensorDict:", rollout.batch_size)
+# print("rollout of three steps:", rollout)
+# print("Shape of the rollout TensorDict:", rollout.batch_size)
 
 actor_net = nn.Sequential(
     nn.LazyLinear(num_cells, device=device),
@@ -230,28 +230,38 @@ for i, tensordict_data in enumerate(collector):
 
             del eval_rollout
 
-    pbar.set_description(", ".join([eval_str, cum_reward_str, stepcount_str, lr_str]))
+    frame_status = f'{i}/{total_frames / frames_per_batch}'
+    pbar.set_description(", ".join([eval_str, cum_reward_str, stepcount_str, lr_str, frame_status]))
 
     # We're also using a learning rate scheduler. Like the gradient clipping,
     # this is a nice-to-have but nothing necessary for PPO to work.
     scheduler.step()
 
-plt.figure(figsize=(10, 10))
+OUT_DIR = '../out/ppo'
+PPO_OUT_DIR = '../out/ppo_model'
+
+os.makedirs(PPO_OUT_DIR, exist_ok=True)
+
+torch.save(policy_module.state_dict(), os.path.join(OUT_DIR, "policy_module.pth"))
+torch.save(value_module.state_dict(), os.path.join(OUT_DIR, "value_module.pth"))
+torch.save(optim.state_dict(), os.path.join(OUT_DIR, "optimizer.pth"))
+torch.save(scheduler.state_dict(), os.path.join(OUT_DIR, "scheduler.pth"))
+
+fig = plt.figure(figsize=(10, 10))
 plt.subplot(2, 2, 1)
 plt.plot(logs["reward"])
-plt.title("training rewards (average)")
+plt.title("mean training reward")
 plt.subplot(2, 2, 2)
 plt.plot(logs["step_count"])
-plt.title("Max step count (training)")
+plt.title("Max step count in frame, training")
 plt.subplot(2, 2, 3)
 plt.plot(logs["eval reward (sum)"])
-plt.title("Return (test), Cumulative Reward")
+plt.title("Test return, cumulative reward")
 plt.subplot(2, 2, 4)
 plt.plot(logs["eval step_count"])
-plt.title("Max step count (test)")
+plt.title("Max step count in frame, testing")
 plt.show()
 
-OUT_DIR = '../out'
 num_files = 0
 for file in os.listdir(OUT_DIR):
     path = os.path.join(OUT_DIR, file)
@@ -260,5 +270,5 @@ for file in os.listdir(OUT_DIR):
 
     num_files += 1
 
-plot_path = os.path.join(OUT_DIR, 'ppo', f'{num_files}.png')
-plt.savefig()
+plot_path = os.path.join(OUT_DIR, f'{num_files}.png')
+fig.savefig(plot_path)
