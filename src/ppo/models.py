@@ -6,7 +6,7 @@ from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 
 NUM_CELLS = 256
 
-def setup_model(env: EnvBase):
+def setup_model(env: EnvBase) -> tuple[ProbabilisticActor, ValueOperator]:
     actor_net = nn.Sequential(
         nn.LazyLinear(NUM_CELLS),
         nn.Tanh(),

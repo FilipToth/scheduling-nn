@@ -54,7 +54,6 @@ register(
     entry_point=MachineEnvironment
 )
 
-print(device)
 base_env = GymEnv("MachineEnv-v0", device=device)
 
 env = TransformedEnv(
