@@ -1,8 +1,0 @@
-\contentsline {section}{\numberline {1}Introduction}{2}{}%
-\contentsline {section}{\numberline {2}An Overview of the Problem of Single-Machine Process Scheduling}{3}{}%
-\contentsline {section}{\numberline {3}An Overview of Current Heuristics}{4}{}%
-\contentsline {section}{\numberline {4}A Deeper Look into Scheduling Optimization Metrics}{5}{}%
-\contentsline {section}{\numberline {5}A Rundown of Deep Reinforcement Learning (Deep RL)}{7}{}%
-\contentsline {section}{\numberline {6}Modelling the Environment}{9}{}%
-\contentsline {section}{\numberline {7}DQN Model Architecture}{11}{}%
-\contentsline {section}{\numberline {8}Training Loop}{11}{}%

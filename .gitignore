@@ -1,5 +1,13 @@
 out/
 
+# LaTex pdf intermediate output files
+*.fdb_latexmk
+*.aux
+*.fls
+tex/*.log
+*.synctex.gz
+*.toc
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -7,9 +7,6 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import torch
-from tensordict.nn import TensorDictModule
-from tensordict.nn.distributions import NormalParamExtractor
-from torch import nn
 from torchrl.collectors import SyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
@@ -18,12 +15,14 @@ from torchrl.envs import (Compose, DoubleToFloat, ObservationNorm, StepCounter,
                           TransformedEnv)
 from torchrl.envs.libs.gym import GymEnv
 from torchrl.envs.utils import check_env_specs, ExplorationType, set_exploration_type
-from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
 from tqdm import tqdm
 
-import environments.env as environments
+
+from ppo.models import setup_model
+from environments.env import MachineEnvironment
+
 from gymnasium import register
 
 is_fork = multiprocessing.get_start_method() == "fork"
@@ -33,7 +32,6 @@ device = (
     else torch.device("cpu")
 )
 
-num_cells = 256  # number of cells in each layer i.e. output dim.
 lr = 1e-4
 max_grad_norm = 1.0
 
@@ -53,7 +51,7 @@ entropy_eps = 4e-4
 # register env
 register(
     id="MachineEnv-v0",
-    entry_point=environments.MachineEnvironment
+    entry_point=MachineEnvironment
 )
 
 print(device)
@@ -79,55 +77,13 @@ env.transform[0].init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
 
 check_env_specs(env)
 
-rollout = env.rollout(3)
-# print("rollout of three steps:", rollout)
-# print("Shape of the rollout TensorDict:", rollout.batch_size)
+policy_module, value_module = setup_model(env)
+policy_module = policy_module.to(device)
+value_module = value_module.to(device)
 
-actor_net = nn.Sequential(
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(2 * env.action_spec.shape[-1], device=device),
-    NormalParamExtractor(),
-)
-
-policy_module = TensorDictModule(
-    actor_net, in_keys=["observation"], out_keys=["loc", "scale"]
-)
-
-policy_module = ProbabilisticActor(
-    module=policy_module,
-    spec=env.action_spec,
-    in_keys=["loc", "scale"],
-    distribution_class=TanhNormal,
-    distribution_kwargs={
-        "min": 0,
-        "max": env.action_space.n - 1,
-    },
-    return_log_prob=True,
-    # we'll need the log-prob for the numerator of the importance weights
-)
-
-value_net = nn.Sequential(
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(num_cells, device=device),
-    nn.Tanh(),
-    nn.LazyLinear(1, device=device),
-)
-
-value_module = ValueOperator(
-    module=value_net,
-    in_keys=["observation"],
-)
-
-print("Running policy:", policy_module(env.reset()))
-print("Running value:", value_module(env.reset()))
+# initialize
+policy_module(env.reset())
+value_module(env.reset())
 
 collector = SyncDataCollector(
     env,
