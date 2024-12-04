@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import torch
 import random
 import numpy as np
 import gymnasium as gym
@@ -51,7 +52,7 @@ class Job:
             use = random.uniform(0, 1)
             resources[res] = use
 
-        time_use = random.randint(1, MAX_JOB_LENGTH,)
+        time_use = random.randint(1, MAX_JOB_LENGTH)
 
         job = Job(resources, time_use, curr_time)
         return job
@@ -68,6 +69,7 @@ class MachineEnvironment(gym.Env):
         self._resources: np.ndarray = None
         self._time = 0
         self._jobs_dispatched = 0
+        self.seed_value = None
 
         # + 1 since the AI can
         # also choose to do nothing
@@ -85,6 +87,21 @@ class MachineEnvironment(gym.Env):
             dtype=np.float32
         )
 
+    def seed(self, seed=None):
+        # TODO: Passing seeds is not working for some reason
+        # this is a quick fix...
+        seed = 5051
+        if seed is None:
+            return
+
+        random.seed(seed)
+        torch.manual_seed(seed)
+
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
+        return [ seed ]
+
     def get_time(self):
         return self._time
 
@@ -92,8 +109,6 @@ class MachineEnvironment(gym.Env):
         # process action
         reward = 0
         info = ""
-
-        print(len(self.job_queue))
 
         if action == ACTION_SPACE_SIZE:
             # reward = self.timestep_action()
@@ -147,9 +162,9 @@ class MachineEnvironment(gym.Env):
 
         return reward
 
-    def reset(self, *, seed=None, options=None):
-        super().reset(seed=seed)
-        random.seed(seed)
+    def reset(self, *, _options=None):
+        super().reset()
+        self.seed(self.seed_value)
 
         self.job_queue = []
         self._scheduled_jobs = []
@@ -184,6 +199,8 @@ class MachineEnvironment(gym.Env):
 
     def mean_slowdown(self) -> float:
         jobs = self._finished_jobs + self._scheduled_jobs
+        if len(jobs) == 0:
+            return 0.0
 
         sum_slowdown = 0.0
         for job in jobs:

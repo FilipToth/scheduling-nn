@@ -32,11 +32,18 @@ env = TransformedEnv(
 
 env.reset()
 
-action = torch.tensor([0])
-action_tensor_dict = TensorDict({ "action": action, "step_count": torch.tensor(0) }, batch_size=())
 
-result = env.step(action_tensor_dict)
-print(result)
+while True:
+    action = torch.tensor([0])
+    action_tensor_dict = TensorDict({ "action": action, "step_count": torch.tensor(0) }, batch_size=())
 
-cumulative_reward = 0
-print(base_env.job_queue)
+    result = env.step(action_tensor_dict)
+    print(result)
+
+    next = result["next"]
+    terminated = bool(next["terminated"])
+    if terminated:
+        break
+
+    cumulative_reward = 0
+    print(base_env)

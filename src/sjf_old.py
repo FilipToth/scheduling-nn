@@ -5,15 +5,14 @@ import environments.env as env
 rewards = []
 
 environment = env.MachineEnvironment()
-environment.reset()
+environment.reset(seed=5051)
 
 cumulative_reward = 0
-for _ in range(50):
-    environment.step(0)
-    continue
-
-    action = 0
+for i in range(5000):
+    # print(len(environment.job_queue))
+    action = 4
     if len(environment.job_queue) > 0:
+        # select shortest job
         shortest_job_index = 0
         shortest_job_time = math.inf
 
@@ -27,10 +26,8 @@ for _ in range(50):
 
         action = shortest_job_index
 
-    _observation, reward, terminated, _, info = environment.step(action)
-    print(action)
+    state, reward, terminated, _, info = environment.step(action)
     cumulative_reward += reward
-    exit()
 
     if terminated:
         break

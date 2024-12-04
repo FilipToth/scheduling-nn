@@ -57,7 +57,7 @@ Their paper has definitely played a key role in influencing our research especia
 \newpage
 \section{An Overview of the Problem of Single-Machine Process Scheduling}
 
-Considering a set of jobs $J_{1}, J_{2}, \cdots J_{n}$ that need to be run on a system sequentially, what is the most efficient way to run these processes such that the can experience the lowest amount of resource-space downtime due to the unused resources and utilize the system's parallelization capabilities to the fullest extent. In a simplified, yet very useful overview, processes have two discrete parameters: CPU-time requirements and memory requirements. We generally evaluate scheduling algorithms based on the following criteria:
+Considering a set of jobs $J_{1}, J_{2}, \dots J_{n}$ that need to be run on a system sequentially, what is the most efficient way to run these processes such that the can experience the lowest amount of resource-space downtime due to the unused resources and utilize the system's parallelization capabilities to the fullest extent. In a simplified, yet very useful overview, processes have two discrete parameters: CPU-time requirements and memory requirements. We generally evaluate scheduling algorithms based on the following criteria:
 
 \begin{itemize}
     \item Job Throughput - execute the highest number of processes per unit time.
@@ -166,7 +166,7 @@ each of the future time steps. When a time step passes, the resource use matrix 
 need to be finite for the actor to be able to correctly process the reward value functions for state-action pairs.
 
 As the actor (training policy network) interacts with the environment, the actor is tasked with selecting an action from a discrete (i.e. non-continuous)
-action space $\mathcal{A} = \{ 0, 1, \cdots n + 1 \}$ where $n$ is the size of the job queue exposed in the observation tensor. Each member of the action
+action space $\mathcal{A} = \{ 0, 1, \dots n + 1 \}$ where $n$ is the size of the job queue exposed in the observation tensor. Each member of the action
 represents the index of a job slot to be scheduled. The environment then loads the job from the job slot and performs a check whether the job can be scheduled
 within our machine resource matrix. If the job cannot be scheduled at time $t = 0$, meaning that the sum of the current resource matrix and the job resource
 use matrix has an element larger than one (one denotes full resource use at the time frame), the model looks ahead to time $t = t + 1$ and repeats the allocation

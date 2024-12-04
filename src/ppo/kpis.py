@@ -36,6 +36,7 @@ env = TransformedEnv(
 # I have to load the .pth files...
 
 env.transform[0].init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
+env.set_seed(5051)
 
 policy_module, _ = setup_model(env)
 policy_module = policy_module.to(device)
@@ -50,8 +51,8 @@ with torch.no_grad():
     print("EVALUATING MODEL...")
 
     initial = env.reset()
+    print(initial["observation"])
     rollout = env.rollout(max_steps=1000, policy=policy_module, tensordict=initial, auto_reset=False)
-    print(rollout)
 
     slowdown = base_env.mean_slowdown()
     print(f"mean slowdown: {slowdown}")
