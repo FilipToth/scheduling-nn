@@ -113,13 +113,17 @@ class MachineEnvironment(gym.Env):
         if action == ACTION_SPACE_SIZE:
             # reward = self.timestep_action()
             self.timestep_action()
-            reward = -0.05
+            reward = -(self.mean_slowdown() * 0.15)
+            if reward == 0.0:
+                reward = -0.05
+
+            # reward = -0.05
             info = "TIMESTEP"
         else:
             if action >= len(self.job_queue):
                 # empty job slot, also time step
                 # reward = self.timestep_action()
-                reward = -0.25
+                # reward = -0.25
                 info = "EMPTY"
             else:
                 job = self.job_queue[action]
@@ -128,7 +132,7 @@ class MachineEnvironment(gym.Env):
                     # the scheduler allocated too many jobs
                     # and now a resource is overused, time step
                     # reward = self.timestep_action()
-                    reward = -0.25
+                    # reward = -0.25
                     info = "OVERALLOC"
                 else:
                     # remove job from queue
@@ -139,7 +143,7 @@ class MachineEnvironment(gym.Env):
                     self._scheduled_jobs.append(job)
 
                     info = "ALLOC"
-                    reward = 0.25
+                    # reward = 0.25
 
         state = self._get_obs()
         terminated = self._jobs_dispatched >= NUM_JOBS_TO_SEND \
@@ -150,6 +154,7 @@ class MachineEnvironment(gym.Env):
 
     def timestep_action(self):
         self.time_step()
+        return
 
         # TODO: Calculate job slowdown and return reward
 
@@ -164,7 +169,7 @@ class MachineEnvironment(gym.Env):
 
     def reset(self, *, _options=None):
         super().reset()
-        self.seed(self.seed_value)
+        # self.seed(self.seed_value)
 
         self.job_queue = []
         self._scheduled_jobs = []

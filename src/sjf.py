@@ -32,7 +32,6 @@ env = TransformedEnv(
 
 env.reset()
 
-
 while True:
     action = torch.tensor([0])
     action_tensor_dict = TensorDict({ "action": action, "step_count": torch.tensor(0) }, batch_size=())

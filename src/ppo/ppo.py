@@ -5,7 +5,9 @@ import os
 
 from collections import defaultdict
 
+import matplotlib
 import matplotlib.pyplot as plt
+
 import torch
 from torchrl.collectors import SyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer
@@ -37,7 +39,7 @@ max_grad_norm = 1.0
 
 frames_per_batch = 1000
 # For a complete training, bring the number of frames up to 1M
-total_frames = 500_000
+total_frames = 170_000 # 500_000
 
 sub_batch_size = 64  # cardinality of the sub-samples gathered from the current data in the inner loop
 num_epochs = 10  # optimization steps per batch of data collected
@@ -118,6 +120,10 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optim, total_frames // frames_per_batch, 0.0
 )
 
+plt.ion()
+fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+axs.flatten()
+
 logs = defaultdict(list)
 pbar = tqdm(total=total_frames)
 eval_str = ""
@@ -161,7 +167,7 @@ for i, tensordict_data in enumerate(collector):
     logs["lr"].append(optim.param_groups[0]["lr"])
     lr_str = f"lr policy: {logs['lr'][-1]: 4.4f}"
 
-    if i % 10 == 0:
+    if i % 5 == 0:
         # We evaluate the policy once every 10 batches of data.
         # Evaluation is rather simple: execute the policy without exploration
         # (take the expected value of the action distribution) for a given
@@ -172,11 +178,14 @@ for i, tensordict_data in enumerate(collector):
             # execute a rollout with the trained policy
             eval_rollout = env.rollout(1000, policy_module)
             cumulative_reward = eval_rollout["next", "reward"].sum().item()
+            eval_slowdown = base_env.mean_slowdown()
 
             logs["eval reward"].append(eval_rollout["next", "reward"].mean().item())
             logs["eval reward (sum)"].append(cumulative_reward)
 
             logs["eval step_count"].append(eval_rollout["step_count"].max().item())
+            logs["eval slowdown"].append(eval_slowdown)
+
             eval_str = (
                 f"eval cumulative reward: {logs['eval reward (sum)'][-1]: 4.4f} "
                 f"(init: {logs['eval reward (sum)'][0]: 4.4f}), "
@@ -185,12 +194,34 @@ for i, tensordict_data in enumerate(collector):
 
             del eval_rollout
 
+    # Update interactive plots
+    axs[0, 0].cla()
+    axs[0, 0].plot(logs["reward"])
+    axs[0, 0].set_title("Mean Training Reward")
+
+    axs[0, 1].cla()
+    axs[0, 1].plot(logs["step_count"])
+    axs[0, 1].set_title("Max Step Count (Training)")
+
+    axs[1, 0].cla()
+    axs[1, 0].plot(logs["eval reward (sum)"])
+    axs[1, 0].set_title("Cumulative Reward (Testing)")
+
+    axs[1, 1].cla()
+    axs[1, 1].plot(logs["eval slowdown"])
+    axs[1, 1].set_title("Mean Job Slowdown (Testing)")
+
+    plt.pause(0.1)
+
     frame_status = f'{i}/{total_frames / frames_per_batch}'
     pbar.set_description(", ".join([eval_str, cum_reward_str, stepcount_str, lr_str, frame_status]))
 
     # We're also using a learning rate scheduler. Like the gradient clipping,
     # this is a nice-to-have but nothing necessary for PPO to work.
     scheduler.step()
+
+plt.ioff()
+plt.show()
 
 OUT_DIR = '../out/ppo'
 PPO_OUT_DIR = '../out/ppo_model'
@@ -201,21 +232,6 @@ torch.save(policy_module.state_dict(), os.path.join(OUT_DIR, "policy_module.pth"
 torch.save(value_module.state_dict(), os.path.join(OUT_DIR, "value_module.pth"))
 torch.save(optim.state_dict(), os.path.join(OUT_DIR, "optimizer.pth"))
 torch.save(scheduler.state_dict(), os.path.join(OUT_DIR, "scheduler.pth"))
-
-fig = plt.figure(figsize=(10, 10))
-plt.subplot(2, 2, 1)
-plt.plot(logs["reward"])
-plt.title("mean training reward")
-plt.subplot(2, 2, 2)
-plt.plot(logs["step_count"])
-plt.title("Max step count in frame, training")
-plt.subplot(2, 2, 3)
-plt.plot(logs["eval reward (sum)"])
-plt.title("Test return, cumulative reward")
-plt.subplot(2, 2, 4)
-plt.plot(logs["eval step_count"])
-plt.title("Max step count in frame, testing")
-plt.show()
 
 num_files = 0
 for file in os.listdir(OUT_DIR):

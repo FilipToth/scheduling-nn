@@ -1,11 +1,11 @@
 import math
-import random
 import environments.env as env
 
 rewards = []
 
 environment = env.MachineEnvironment()
-environment.reset(seed=5051)
+environment.seed(5051)
+environment.reset()
 
 cumulative_reward = 0
 for i in range(5000):
