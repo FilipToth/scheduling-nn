@@ -14,8 +14,8 @@ ACTION_SPACE_SIZE = 4
 NUM_RESOURCES = 2
 RESOURCE_TIME_SIZE = 10
 
-NUM_JOBS_TO_SEND = 30
-JOB_DISPATCH_AFFINITY = 0.4
+NUM_JOBS_TO_SEND = 80
+# JOB_DISPATCH_AFFINITY = 0.4
 MAX_JOB_LENGTH = 6
 
 class ResourceType(enum.Enum):
@@ -239,20 +239,21 @@ class MachineEnvironment(gym.Env):
         if self._jobs_dispatched >= NUM_JOBS_TO_SEND:
             return
 
-        p_value = random.uniform(0, 1)
-        if p_value < (1 - JOB_DISPATCH_AFFINITY):
-            return
+        jobs_to_send = random.randrange(0, 4)
+        for _ in range(jobs_to_send):
+            if self._jobs_dispatched >= NUM_JOBS_TO_SEND:
+                break
 
-        resources = {}
-        for res in ResourceType:
-            res_use = random.uniform(0, 1)
-            resources[res] = res_use
+            resources = {}
+            for res in ResourceType:
+                res_use = random.uniform(0, 1)
+                resources[res] = res_use
 
-        time_use = random.randrange(1, MAX_JOB_LENGTH + 1)
-        job = Job(resources, time_use, self._time)
+            time_use = random.randrange(1, MAX_JOB_LENGTH + 1)
+            job = Job(resources, time_use, self._time)
 
-        self.job_queue.append(job)
-        self._jobs_dispatched += 1
+            self.job_queue.append(job)
+            self._jobs_dispatched += 1
 
     def _alloc(self, job: Job) -> tuple[bool, int]:
         job_resources = list(job.resource_use.values())

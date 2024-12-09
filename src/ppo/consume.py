@@ -34,13 +34,14 @@ def init_consume() -> tuple[TensorDictModule, TransformedEnv, GymEnv]:
         ),
     )
 
+    print("Obs norm")
     env.transform[0].init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
     env.set_seed(5051)
 
     policy_module, _ = setup_model(env)
     policy_module = policy_module.to(device)
 
-    policy_net_state = torch.load("../out/ppo/policy_module.pth")
+    policy_net_state = torch.load("../out/ppo/1_policy_module.pth")
     policy_module.load_state_dict(policy_net_state)
 
     policy_module(env.reset())

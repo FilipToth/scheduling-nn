@@ -2,7 +2,7 @@ import torch
 import tkinter
 import numpy as np
 from ppo.consume import init_consume
-from environments.env import MachineEnvironment, ACTION_SPACE_SIZE, NUM_RESOURCES, RESOURCE_TIME_SIZE
+from environments.env import ACTION_SPACE_SIZE, NUM_RESOURCES, RESOURCE_TIME_SIZE
 
 WIDTH = (NUM_RESOURCES * 90) + (ACTION_SPACE_SIZE * 240 * NUM_RESOURCES) + 100
 HEIGHT = (90 * RESOURCE_TIME_SIZE)
@@ -20,7 +20,7 @@ policy_module, env, base_env = init_consume()
 
 def draw_env():
     canvas.delete("all")
-    
+
     # resources have a shape (NUM_RES, TIME_HORIZONT)
     # draw resource state space
     draw_matrix(env.resources, 30, 30)
@@ -50,12 +50,12 @@ def draw_matrix(matrix: np.ndarray, origin_x: int, origin_y: int):
         canvas.create_rectangle(x, y, x1, y1, width=2)
 
 
-last_tensordict = env.reset()
+initial = env.reset()
 def btn_click():
-    rollout = env.rollout(max_steps=1, policy=policy_module, tensordict=last_tensordict, auto_reset=False)
-    print(rollout)
+    env.rollout(max_steps=1, policy=policy_module)
+    draw_env()
 
-btn = tkinter.Button(root, text="AI Step", command=lambda _: btn_click())
+btn = tkinter.Button(root, text="AI Step", command=btn_click)
 btn.pack()
 
 draw_env()

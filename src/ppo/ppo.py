@@ -5,7 +5,6 @@ import os
 
 from collections import defaultdict
 
-import matplotlib
 import matplotlib.pyplot as plt
 
 import torch
