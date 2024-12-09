@@ -66,7 +66,7 @@ class MachineEnvironment(gym.Env):
         self.job_queue: list[Job] = []
         self._scheduled_jobs: list[Job] = []
         self._finished_jobs: list[Job] = []
-        self._resources: np.ndarray = None
+        self.resources: np.ndarray = None
         self._time = 0
         self._jobs_dispatched = 0
         self.seed_value = None
@@ -173,7 +173,7 @@ class MachineEnvironment(gym.Env):
 
         self.job_queue = []
         self._scheduled_jobs = []
-        self._resources = np.zeros((NUM_RESOURCES, RESOURCE_TIME_SIZE))
+        self.resources = np.zeros((NUM_RESOURCES, RESOURCE_TIME_SIZE))
         self._time = 0
         self._jobs_dispatched = 0
 
@@ -215,11 +215,11 @@ class MachineEnvironment(gym.Env):
         return mean_slowdown
 
     def _step_resource_use(self):
-        res = np.delete(self._resources, (0), axis=1)
+        res = np.delete(self.resources, (0), axis=1)
         new_row = np.zeros(shape=(NUM_RESOURCES, 1))
 
         res = np.append(res, new_row, axis=1)
-        self._resources = res
+        self.resources = res
 
     def _step_scheduled_jobs(self):
         jobs_to_unschedule = []
@@ -267,7 +267,7 @@ class MachineEnvironment(gym.Env):
                     res = job_resources[j]
                     job_resource_matrix[j:j + 1, i:i + 1] = res
 
-            local_time_resource = self._resources[:, time_start:timeframe_end]
+            local_time_resource = self.resources[:, time_start:timeframe_end]
             local_resources_with_job = np.add(local_time_resource, job_resource_matrix)
 
             success = np.all(local_resources_with_job <= 1)
@@ -275,13 +275,13 @@ class MachineEnvironment(gym.Env):
                 continue
 
             # update machine resources
-            self._resources[:, timeframe_start:timeframe_end] = local_resources_with_job
+            self.resources[:, timeframe_start:timeframe_end] = local_resources_with_job
             return (True, time_start)
 
         return (False, 0)
 
     def _get_obs(self):
-        state = self._resources.flatten()
+        state = self.resources.flatten()
 
         # append job queue info
         job_state = []
