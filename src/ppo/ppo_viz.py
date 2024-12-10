@@ -1,12 +1,26 @@
 
-from viz import EnvironmentVisualization
+from tensordict import TensorDict
 from ppo.consume import init_consume
+from viz import EnvironmentVisualization
 
 policy_module, env, base_env = init_consume()
-initial = env.reset()
+latest_obs = env.reset()
 
 def action_callback():
-    env.rollout(max_steps=1, policy=policy_module)
+    global latest_obs
+
+    model_out = policy_module(latest_obs)
+    action = model_out["action"]
+
+    action_tensordict = TensorDict({
+        "action": action,
+        "step_count": 1,
+    }, batch_size=env.batch_size)
+
+    env_out = env.step(action_tensordict)
+    latest_obs = env_out["next"]
+
+    print()
 
 
 _viz = EnvironmentVisualization(base_env, action_callback)

@@ -106,6 +106,16 @@ class MachineEnvironment(gym.Env):
         return self._time
 
     def step(self, action: int):
+        slow_rew = -(self.mean_slowdown() * 0.15)
+
+        debug_str = f"action: {action}, " + \
+                    f"job_queue_len: {len(self.job_queue)}, " + \
+                    f"slowdown_rew: {slow_rew}, " + \
+                    f"total_pipeline: {len(self._finished_jobs + self._scheduled_jobs)}, " + \
+                    f"total_dispatched: {self._jobs_dispatched}"
+
+        print(debug_str)
+
         # process action
         reward = 0
         info = ""
@@ -136,6 +146,7 @@ class MachineEnvironment(gym.Env):
                     info = "OVERALLOC"
                 else:
                     # remove job from queue
+                    print(f"Removing allocated job at index: {action}")
                     del self.job_queue[action]
 
                     # schedule job
@@ -171,11 +182,14 @@ class MachineEnvironment(gym.Env):
         super().reset()
         # self.seed(self.seed_value)
 
+        print("PERFORMING RESET")
         self.job_queue = []
+        self._finished_jobs: list[Job] = []
         self._scheduled_jobs = []
         self.resources = np.zeros((NUM_RESOURCES, RESOURCE_TIME_SIZE))
         self._time = 0
         self._jobs_dispatched = 0
+
 
         # TODO: is this really necessary?
         self.time_step(is_init=True)
@@ -240,6 +254,9 @@ class MachineEnvironment(gym.Env):
             return
 
         jobs_to_send = random.randrange(0, 4)
+        if jobs_to_send != 0:
+            print(f"Dispatching {jobs_to_send} jobs")
+
         for _ in range(jobs_to_send):
             if self._jobs_dispatched >= NUM_JOBS_TO_SEND:
                 break
