@@ -106,16 +106,6 @@ class MachineEnvironment(gym.Env):
         return self._time
 
     def step(self, action: int):
-        slow_rew = -(self.mean_slowdown() * 0.15)
-
-        debug_str = f"action: {action}, " + \
-                    f"job_queue_len: {len(self.job_queue)}, " + \
-                    f"slowdown_rew: {slow_rew}, " + \
-                    f"total_pipeline: {len(self._finished_jobs + self._scheduled_jobs)}, " + \
-                    f"total_dispatched: {self._jobs_dispatched}"
-
-        print(debug_str)
-
         # process action
         reward = 0
         info = ""
@@ -123,9 +113,12 @@ class MachineEnvironment(gym.Env):
         if action == ACTION_SPACE_SIZE:
             # reward = self.timestep_action()
             self.timestep_action()
+            """
             reward = -(self.mean_slowdown() * 0.15)
             if reward == 0.0:
-                reward = -0.05
+                reward = -1
+            """
+            reward = -0.25
 
             # reward = -0.05
             info = "TIMESTEP"
@@ -133,7 +126,7 @@ class MachineEnvironment(gym.Env):
             if action >= len(self.job_queue):
                 # empty job slot, also time step
                 # reward = self.timestep_action()
-                # reward = -0.25
+                reward = -0.25
                 info = "EMPTY"
             else:
                 job = self.job_queue[action]
@@ -142,11 +135,10 @@ class MachineEnvironment(gym.Env):
                     # the scheduler allocated too many jobs
                     # and now a resource is overused, time step
                     # reward = self.timestep_action()
-                    # reward = -0.25
+                    reward = -0.25
                     info = "OVERALLOC"
                 else:
                     # remove job from queue
-                    print(f"Removing allocated job at index: {action}")
                     del self.job_queue[action]
 
                     # schedule job
@@ -154,7 +146,10 @@ class MachineEnvironment(gym.Env):
                     self._scheduled_jobs.append(job)
 
                     info = "ALLOC"
-                    # reward = 0.25
+                    reward = 0.25
+
+        slow_rew = -(self.mean_slowdown() * 0.15)
+        print(f"ac: {action}, rew: {reward}, slowdown: {slow_rew}, jqueue_len: {len(self.job_queue)}")
 
         state = self._get_obs()
         terminated = self._jobs_dispatched >= NUM_JOBS_TO_SEND \
@@ -179,10 +174,10 @@ class MachineEnvironment(gym.Env):
         return reward
 
     def reset(self, *, _options=None):
+        print("RESETTING")
         super().reset()
         # self.seed(self.seed_value)
 
-        print("PERFORMING RESET")
         self.job_queue = []
         self._finished_jobs: list[Job] = []
         self._scheduled_jobs = []
@@ -254,9 +249,6 @@ class MachineEnvironment(gym.Env):
             return
 
         jobs_to_send = random.randrange(0, 4)
-        if jobs_to_send != 0:
-            print(f"Dispatching {jobs_to_send} jobs")
-
         for _ in range(jobs_to_send):
             if self._jobs_dispatched >= NUM_JOBS_TO_SEND:
                 break

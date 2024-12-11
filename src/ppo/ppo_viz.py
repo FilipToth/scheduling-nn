@@ -1,4 +1,3 @@
-
 from tensordict import TensorDict
 from ppo.consume import init_consume
 from viz import EnvironmentVisualization
@@ -23,4 +22,4 @@ def action_callback():
     print()
 
 
-_viz = EnvironmentVisualization(base_env, action_callback)
+_viz = EnvironmentVisualization(base_env, action_callback, True)

@@ -1,12 +1,14 @@
-import environments.env as environments
+from viz import EnvironmentVisualization
+from environments.env import MachineEnvironment
 
-env = environments.MachineEnvironment()
-initial_state, _ = env.reset()
-print(f'initial state shape: {initial_state.shape}')
+env = MachineEnvironment()
+env.reset()
 
-while True:
-    env.render()
+def action_callback():
+    print()
 
-    print(env._resources)
-    action = int(input("action -> "))
-    observation, reward, terminated, truncated, _ = env.step(action)
+    action = int(input("action? "))
+    env.step(action)
+
+
+_viz = EnvironmentVisualization(env, action_callback, False)

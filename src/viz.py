@@ -10,9 +10,10 @@ MATRIX_SPACING = 10
 MATRIX_DOT_SIZE = 50
 
 class EnvironmentVisualization:
-    def __init__(self, env: GymEnv, action_callback) -> None:
+    def __init__(self, env: GymEnv, action_callback, use_button: bool) -> None:
         self.env = env
         self.action_callback = action_callback
+        self.use_button = use_button
 
         root = tkinter.Tk()
         root.geometry(f"{WIDTH}x{HEIGHT + 100}")
@@ -20,8 +21,12 @@ class EnvironmentVisualization:
         self.canvas = tkinter.Canvas(root, width=WIDTH, height=HEIGHT)
         self.canvas.pack()
 
-        btn = tkinter.Button(root, text="AI Step", command=lambda: self.btn_click())
-        btn.pack()
+        if use_button:
+            btn = tkinter.Button(root, text="AI Step", command=lambda: self.btn_click())
+            btn.pack()
+
+        if not use_button:
+            root.after(0, lambda: self.btn_click())
 
         self.draw_env()
         self.canvas.mainloop()
@@ -33,7 +38,12 @@ class EnvironmentVisualization:
         # draw resource state space
         self.draw_matrix(self.env.resources, 30, 30)
 
-        for index, job in enumerate(self.env.job_queue):
+        queue_len = len(self.env.job_queue)
+        action_space_len = min(queue_len, ACTION_SPACE_SIZE)
+
+        for index in range(action_space_len):
+            job = self.env.job_queue[index]
+
             state = []
             for _ in range(job.time_use):
                 time_state = []
@@ -60,3 +70,6 @@ class EnvironmentVisualization:
     def btn_click(self):
         self.action_callback()
         self.draw_env()
+
+        if not self.use_button:
+            self.btn_click()
