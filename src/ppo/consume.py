@@ -8,7 +8,7 @@ from torchrl.modules.tensordict_module.common import TensorDictModule
 from torchrl.envs import (Compose, DoubleToFloat, ObservationNorm, StepCounter,
                           TransformedEnv)
 
-def init_consume() -> tuple[TensorDictModule, TransformedEnv, GymEnv]:
+def init_consume(policy_path: str) -> tuple[TensorDictModule, TransformedEnv, GymEnv]:
     is_fork = multiprocessing.get_start_method() == "fork"
     device = (
         torch.device(0)
@@ -22,7 +22,7 @@ def init_consume() -> tuple[TensorDictModule, TransformedEnv, GymEnv]:
         entry_point=MachineEnvironment
     )
 
-    base_env = GymEnv("MachineEnv-v0", device=device)
+    base_env = GymEnv("MachineEnv-v0", device=device, log_path="../out/consume.log")
 
     env = TransformedEnv(
         base_env,
@@ -34,14 +34,13 @@ def init_consume() -> tuple[TensorDictModule, TransformedEnv, GymEnv]:
         ),
     )
 
-    print("Obs norm")
     env.transform[0].init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
     env.set_seed(5051)
 
     policy_module, _ = setup_model(env)
     policy_module = policy_module.to(device)
 
-    policy_net_state = torch.load("../out/ppo/1_policy_module.pth")
+    policy_net_state = torch.load(policy_path)
     policy_module.load_state_dict(policy_net_state)
 
     policy_module(env.reset())

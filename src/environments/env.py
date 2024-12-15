@@ -46,20 +46,9 @@ class Job:
         slowdown = (waiting_time + service_time) / service_time
         return slowdown
 
-    def new_random(curr_time: int) -> Job:
-        resources = {}
-        for res in ResourceType:
-            use = random.uniform(0, 1)
-            resources[res] = use
-
-        time_use = random.randint(1, MAX_JOB_LENGTH)
-
-        job = Job(resources, time_use, curr_time)
-        return job
-
 
 class MachineEnvironment(gym.Env):
-    def __init__(self) -> None:
+    def __init__(self, log_path = None) -> None:
         # note that jobs also
         # have a timeframe,
         # thus the + 1
@@ -67,9 +56,15 @@ class MachineEnvironment(gym.Env):
         self._scheduled_jobs: list[Job] = []
         self._finished_jobs: list[Job] = []
         self.resources: np.ndarray = None
-        self._time = 0
+        self.time = 0
         self._jobs_dispatched = 0
         self.seed_value = None
+
+        if log_path != None:
+            self.log_handle = open(log_path, "w+")
+            self.reset_logs()
+        else:
+            self.log_handle = None
 
         # + 1 since the AI can
         # also choose to do nothing
@@ -103,7 +98,7 @@ class MachineEnvironment(gym.Env):
         return [ seed ]
 
     def get_time(self):
-        return self._time
+        return self.time
 
     def step(self, action: int):
         # process action
@@ -111,22 +106,12 @@ class MachineEnvironment(gym.Env):
         info = ""
 
         if action == ACTION_SPACE_SIZE:
-            # reward = self.timestep_action()
-            self.timestep_action()
-            """
-            reward = -(self.mean_slowdown() * 0.15)
-            if reward == 0.0:
-                reward = -1
-            """
-            reward = -0.25
-
-            # reward = -0.05
+            self.time_step()
             info = "TIMESTEP"
         else:
             if action >= len(self.job_queue):
                 # empty job slot, also time step
-                # reward = self.timestep_action()
-                reward = -0.25
+                self.time_step()
                 info = "EMPTY"
             else:
                 job = self.job_queue[action]
@@ -134,47 +119,36 @@ class MachineEnvironment(gym.Env):
                 if not success_alloc:
                     # the scheduler allocated too many jobs
                     # and now a resource is overused, time step
-                    # reward = self.timestep_action()
-                    reward = -0.25
+                    self.time_step()
                     info = "OVERALLOC"
                 else:
                     # remove job from queue
                     del self.job_queue[action]
 
                     # schedule job
-                    job.schedule(self._time + time_frame)
+                    job.schedule(self.time + time_frame)
                     self._scheduled_jobs.append(job)
-
                     info = "ALLOC"
                     reward = 0.25
 
-        slow_rew = -(self.mean_slowdown() * 0.15)
-        print(f"ac: {action}, rew: {reward}, slowdown: {slow_rew}, jqueue_len: {len(self.job_queue)}")
+        if info != "ALLOC":
+            slowdown = self.mean_slowdown()
+            if slowdown == 0.0:
+                slowdown = 1
+
+            reward = -slowdown
 
         state = self._get_obs()
         terminated = self._jobs_dispatched >= NUM_JOBS_TO_SEND \
             and len(self.job_queue) == 0 \
             and len(self._scheduled_jobs) == 0
 
+        self._log(f"action: {action}, terminated: {terminated}, js_dispatched: {self._jobs_dispatched}, j_queue: {len(self.job_queue)}, sched_jobs: {len(self._scheduled_jobs)}")
         return state, reward, terminated, False, info
 
-    def timestep_action(self):
-        self.time_step()
-        return
-
-        # TODO: Calculate job slowdown and return reward
-
-        reward = 0
-        for job in self.job_queue:
-            if job.time_use == 0:
-                continue
-
-            reward += -1 / job.time_use
-
-        return reward
-
     def reset(self, *, _options=None):
-        print("RESETTING")
+        slowdown = self.mean_slowdown()
+        self._log(f"Resetting; slowdown: {slowdown}")
         super().reset()
         # self.seed(self.seed_value)
 
@@ -182,7 +156,7 @@ class MachineEnvironment(gym.Env):
         self._finished_jobs: list[Job] = []
         self._scheduled_jobs = []
         self.resources = np.zeros((NUM_RESOURCES, RESOURCE_TIME_SIZE))
-        self._time = 0
+        self.time = 0
         self._jobs_dispatched = 0
 
 
@@ -205,7 +179,7 @@ class MachineEnvironment(gym.Env):
 
     def time_step(self, is_init=False):
         if not is_init:
-            self._time += 1
+            self.time += 1
 
         self._job_dispatch()
         self._step_resource_use()
@@ -214,7 +188,7 @@ class MachineEnvironment(gym.Env):
     def mean_slowdown(self) -> float:
         jobs = self._finished_jobs + self._scheduled_jobs
         if len(jobs) == 0:
-            return 0.0
+            return -1
 
         sum_slowdown = 0.0
         for job in jobs:
@@ -234,7 +208,7 @@ class MachineEnvironment(gym.Env):
         jobs_to_unschedule = []
         for job in self._scheduled_jobs:
             time_done = job.time_scheduled + job.time_use
-            if time_done > self._time:
+            if time_done > self.time:
                 continue
 
             # job is done
@@ -248,10 +222,15 @@ class MachineEnvironment(gym.Env):
         if self._jobs_dispatched >= NUM_JOBS_TO_SEND:
             return
 
-        jobs_to_send = random.randrange(0, 4)
+        jobs_queued = len(self.job_queue)
+        if jobs_queued > ACTION_SPACE_SIZE:
+            return
+
+        jobs_to_send = ACTION_SPACE_SIZE - jobs_queued
         for _ in range(jobs_to_send):
             if self._jobs_dispatched >= NUM_JOBS_TO_SEND:
-                break
+                # break
+                return
 
             resources = {}
             for res in ResourceType:
@@ -259,7 +238,7 @@ class MachineEnvironment(gym.Env):
                 resources[res] = res_use
 
             time_use = random.randrange(1, MAX_JOB_LENGTH + 1)
-            job = Job(resources, time_use, self._time)
+            job = Job(resources, time_use, self.time)
 
             self.job_queue.append(job)
             self._jobs_dispatched += 1
@@ -317,5 +296,17 @@ class MachineEnvironment(gym.Env):
     def _get_info(self):
         return {}
 
+    def _log(self, msg):
+        if self.log_handle == None:
+            return
+
+        self.log_handle.write(msg + "\n")
+
+    def reset_logs(self):
+         self.log_handle.truncate(0)
+
     def close(self):
+        if self.log_handle != None:
+            self.log_handle.close()
+
         return super().close()

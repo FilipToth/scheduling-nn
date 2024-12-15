@@ -2,8 +2,9 @@ from tensordict import TensorDict
 from ppo.consume import init_consume
 from viz import EnvironmentVisualization
 
-policy_module, env, base_env = init_consume()
+policy_module, env, base_env = init_consume("../out/ppo/policy_module.pth")
 latest_obs = env.reset()
+env.reset_logs()
 
 def action_callback():
     global latest_obs
@@ -18,8 +19,6 @@ def action_callback():
 
     env_out = env.step(action_tensordict)
     latest_obs = env_out["next"]
-
-    print()
 
 
 _viz = EnvironmentVisualization(base_env, action_callback, True)

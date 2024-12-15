@@ -30,6 +30,7 @@ for i in range(5000):
     cumulative_reward += reward
 
     if terminated:
+        print(f"Performed a total of {i} steps")
         break
 
 slowdown = environment.mean_slowdown()

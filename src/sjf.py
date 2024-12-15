@@ -32,12 +32,13 @@ env = TransformedEnv(
 
 env.reset()
 
+steps = 0
 while True:
     action = torch.tensor([0])
     action_tensor_dict = TensorDict({ "action": action, "step_count": torch.tensor(0) }, batch_size=())
 
+    steps += 1
     result = env.step(action_tensor_dict)
-    print(result)
 
     next = result["next"]
     terminated = bool(next["terminated"])

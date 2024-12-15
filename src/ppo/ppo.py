@@ -33,12 +33,14 @@ device = (
     else torch.device("cpu")
 )
 
-lr = 8e-5
+run_name = "KPI Rewards, Implicit Timesteps, Always-full Job-queue - Run #3"
+
+lr = 6e-5
 max_grad_norm = 1.0
 
 frames_per_batch = 1000
 # For a complete training, bring the number of frames up to 1M
-total_frames =  200_000 # 500_000
+total_frames =  300_000 # 500_000
 
 sub_batch_size = 64  # cardinality of the sub-samples gathered from the current data in the inner loop
 num_epochs = 10  # optimization steps per batch of data collected
@@ -55,7 +57,7 @@ register(
     entry_point=MachineEnvironment
 )
 
-base_env = GymEnv("MachineEnv-v0", device=device)
+base_env = GymEnv("MachineEnv-v0", device=device, log_path="../out/training.log")
 
 env = TransformedEnv(
     base_env,
@@ -121,6 +123,7 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
 
 plt.ion()
 fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+fig.suptitle(run_name)
 axs.flatten()
 
 logs = defaultdict(list)
