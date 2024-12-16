@@ -132,7 +132,7 @@ class PPOTrainer:
         self.loss_module = ClipPPOLoss(
             actor_network=self.policy_module,
             critic_network=self.value_module,
-            clip_epsilon=self.params.clip_epsilon,
+            clip_epsilon=self.params.clip_eps,
             entropy_bonus=bool(self.params.entropy_eps),
             entropy_coef=self.params.entropy_eps,
             # these keys match by default but we set this for completeness

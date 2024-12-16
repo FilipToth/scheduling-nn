@@ -12,8 +12,19 @@ def step_callback(num_el, reward, step_count, lr):
 
 def train_ppo(config):
     lr = config["lr"]
+    gamma = config["gamma"]
+    lmbda = config["lmbda"]
+    clip_eps = config["clip_eps"]
+    entropy_eps = config["entropy_eps"]
+    max_grad_norm = config["max_grad_norm"]
+
     params = PPOParams(
-        lr=lr
+        lr=lr,
+        gamma=gamma,
+        lmbda=lmbda,
+        clip_eps=clip_eps,
+        entropy_eps=entropy_eps,
+        max_grad_norm=max_grad_norm
     )
 
     trainer = PPOTrainer(params, eval_callback, step_callback)
