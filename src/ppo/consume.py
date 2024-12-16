@@ -1,3 +1,4 @@
+import os
 import torch
 from gymnasium import register
 from torch import multiprocessing
@@ -22,6 +23,7 @@ def init_consume(policy_path: str) -> tuple[TensorDictModule, TransformedEnv, Gy
         entry_point=MachineEnvironment
     )
 
+    os.makedirs("../out/", exist_ok=True)
     base_env = GymEnv("MachineEnv-v0", device=device, log_path="../out/consume.log")
 
     env = TransformedEnv(

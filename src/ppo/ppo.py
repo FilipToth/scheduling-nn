@@ -1,5 +1,6 @@
-from typing import Callable
 from numbers import Number
+from typing import Callable
+from typing_extensions import Self
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -38,24 +39,38 @@ device = (
 
 run_name = "KPI Rewards, Implicit Timesteps, Always-full Job-queue - Run #3"
 
-lr = 6e-5
-max_grad_norm = 1.0
-
 frames_per_batch = 1000
 # For a complete training, bring the number of frames up to 1M
 total_frames =  300_000 # 500_000
 
 sub_batch_size = 64  # cardinality of the sub-samples gathered from the current data in the inner loop
 num_epochs = 10  # optimization steps per batch of data collected
-clip_epsilon = (
-    0.1  # clip value for PPO loss: see the equation in the intro for more context.
-)
-gamma = 0.99
-lmbda = 0.95
-entropy_eps = 4e-4
+
+OUT_DIR = '../out/ppo'
+PPO_OUT_DIR = '../out/ppo_model'
+
+class PPOParams:
+    def __init__(self, lr: float, gamma: float, lmbda: float, clip_eps: float, entropy_eps: float, max_grad_norm: float) -> None:
+        self.lr = lr
+        self.gamma = gamma
+        self.lmbda = lmbda
+        self.clip_eps = clip_eps
+        self.entropy_eps = entropy_eps
+        self.max_grad_norm = max_grad_norm
+
+    def default() -> Self:
+        return PPOParams(
+            lr=6e-5,
+            gamma=0.99,
+            lmbda=0.95,
+            clip_eps=0.1,
+            entropy_eps=4e-4,
+            max_grad_norm=1.0
+        )
 
 class PPOTrainer:
-    def __init__(self, eval_callback: Callable[[Number, Number, Number, Number]], step_callback: Callable[[Number, Number, Number, Number]]):
+    def __init__(self, params: PPOParams, eval_callback: Callable[[Number, Number, Number, Number], None], step_callback: Callable[[Number, Number, Number, Number], None]):
+        self.params = params
         self.eval_callback = eval_callback
         self.step_callback = step_callback
         self.frame = 0
@@ -70,6 +85,7 @@ class PPOTrainer:
             entry_point=MachineEnvironment
         )
 
+        os.makedirs("../out/", exist_ok=True)
         self.base_env = GymEnv("MachineEnv-v0", device=device, log_path="../out/training.log")
 
         env = TransformedEnv(
@@ -88,16 +104,16 @@ class PPOTrainer:
 
     def _setup_modules(self):
         policy_module, value_module = setup_model(self.env)
-        policy_module = policy_module.to(device)
-        value_module = value_module.to(device)
+        self.policy_module = policy_module.to(device)
+        self.value_module = value_module.to(device)
 
         # initialize
-        policy_module(self.env.reset())
-        value_module(self.env.reset())
+        self.policy_module(self.env.reset())
+        self.value_module(self.env.reset())
 
         self.collector = SyncDataCollector(
             self.env,
-            policy_module,
+            self.policy_module,
             frames_per_batch=frames_per_batch,
             total_frames=total_frames,
             split_trajs=False,
@@ -110,24 +126,30 @@ class PPOTrainer:
         )
 
         self.advantage_module = GAE(
-            gamma=gamma, lmbda=lmbda, value_network=value_module, average_gae=True
+            gamma=self.params.gamma, lmbda=self.params.lmbda, value_network=self.value_module, average_gae=True
         )
 
-        loss_module = ClipPPOLoss(
-            actor_network=policy_module,
-            critic_network=value_module,
-            clip_epsilon=clip_epsilon,
-            entropy_bonus=bool(entropy_eps),
-            entropy_coef=entropy_eps,
+        self.loss_module = ClipPPOLoss(
+            actor_network=self.policy_module,
+            critic_network=self.value_module,
+            clip_epsilon=self.params.clip_epsilon,
+            entropy_bonus=bool(self.params.entropy_eps),
+            entropy_coef=self.params.entropy_eps,
             # these keys match by default but we set this for completeness
             critic_coef=1.0,
             loss_critic_type="smooth_l1",
         )
 
-        optim = torch.optim.Adam(loss_module.parameters(), lr)
+        self.optim = torch.optim.Adam(self.loss_module.parameters(), self.params.lr)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optim, total_frames // frames_per_batch, 0.0
+            self.optim, total_frames // frames_per_batch, 0.0
         )
+
+    def train(self):
+        while True:
+            reward = self.train_step()
+            if reward == None:
+                break
 
     def train_step(self):
         tensordict_data = self.collector.next()
@@ -156,7 +178,7 @@ class PPOTrainer:
 
                 # this is not strictly mandatory but it's good practice to keep
                 # your gradient norm bounded
-                torch.nn.utils.clip_grad_norm_(self.loss_module.parameters(), max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(self.loss_module.parameters(), self.params.max_grad_norm)
                 self.optim.step()
                 self.optim.zero_grad()
 
@@ -183,46 +205,45 @@ class PPOTrainer:
                 self.eval_callback(eval_reward, cumulative_reward, eval_step_count, eval_slowdown)
                 del eval_rollout
 
-        self.step_callback(reward, step_count, lr)
+        numel = tensordict_data.numel()
+        self.step_callback(numel, reward, step_count, lr)
 
         # We're also using a learning rate scheduler. Like the gradient clipping,
         # this is a nice-to-have but nothing necessary for PPO to work.
         self.scheduler.step()
         self.frame += 1
 
-plt.ion()
-fig, axs = plt.subplots(2, 2, figsize=(10, 10))
-fig.suptitle(run_name)
-axs.flatten()
+        return reward
 
-pbar = tqdm(total=total_frames)
-eval_str = ""
+    def save(self):
+        os.makedirs(PPO_OUT_DIR, exist_ok=True)
 
-plt.ioff()
-plt.show()
+        torch.save(self.policy_module.state_dict(), os.path.join(OUT_DIR, "policy_module.pth"))
+        torch.save(self.value_module.state_dict(), os.path.join(OUT_DIR, "value_module.pth"))
+        torch.save(self.optim.state_dict(), os.path.join(OUT_DIR, "optimizer.pth"))
+        torch.save(self.scheduler.state_dict(), os.path.join(OUT_DIR, "scheduler.pth"))
 
-OUT_DIR = '../out/ppo'
-PPO_OUT_DIR = '../out/ppo_model'
-
-os.makedirs(PPO_OUT_DIR, exist_ok=True)
-
-torch.save(policy_module.state_dict(), os.path.join(OUT_DIR, "policy_module.pth"))
-torch.save(value_module.state_dict(), os.path.join(OUT_DIR, "value_module.pth"))
-torch.save(optim.state_dict(), os.path.join(OUT_DIR, "optimizer.pth"))
-torch.save(scheduler.state_dict(), os.path.join(OUT_DIR, "scheduler.pth"))
-
-num_files = 0
-for file in os.listdir(OUT_DIR):
-    path = os.path.join(OUT_DIR, file)
-    if not os.path.isfile(path):
-        continue
-
-    num_files += 1
-
-plot_path = os.path.join(OUT_DIR, f'{num_files}.png')
-fig.savefig(plot_path)
 
 if __name__ == "__main__":
+    plt.ion()
+    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+    fig.suptitle(run_name)
+    axs.flatten()
+
+    pbar = tqdm(total=total_frames)
+    eval_str = ""
+
+    num_files = 0
+    for file in os.listdir(OUT_DIR):
+        path = os.path.join(OUT_DIR, file)
+        if not os.path.isfile(path):
+            continue
+
+        num_files += 1
+
+    plot_path = os.path.join(OUT_DIR, f'{num_files}.png')
+    fig.savefig(plot_path)
+
     logs = defaultdict(list)
 
     def eval_callback(eval_reward, cumulative_reward, eval_step_count, eval_slowdown):
@@ -277,4 +298,9 @@ if __name__ == "__main__":
         pbar.set_description(", ".join([eval_str, cum_reward_str, stepcount_str, lr_str, frame_status]))
 
 
-    trainer = PPOTrainer(eval_callback, )
+    params = PPOParams.default()
+    trainer = PPOTrainer(params, eval_callback, step_callback)
+    trainer.train()
+
+    plt.ioff()
+    plt.show()
